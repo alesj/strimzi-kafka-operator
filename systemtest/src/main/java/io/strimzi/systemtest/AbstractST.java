@@ -24,6 +24,7 @@ import io.strimzi.api.kafka.model.DoneableKafkaConnect;
 import io.strimzi.api.kafka.model.DoneableKafkaMirrorMaker;
 import io.strimzi.api.kafka.model.DoneableKafkaTopic;
 import io.strimzi.api.kafka.model.Kafka;
+import io.strimzi.api.kafka.model.KafkaBridgeResources;
 import io.strimzi.api.kafka.model.KafkaConnect;
 import io.strimzi.api.kafka.model.KafkaMirrorMaker;
 import io.strimzi.api.kafka.model.KafkaResources;
@@ -174,6 +175,18 @@ public abstract class AbstractST extends BaseITST implements TestSeparator {
 
     static String entityOperatorDeploymentName(String clusterName) {
         return KafkaResources.entityOperatorDeploymentName(clusterName);
+    }
+
+    static String kafkaBridgeClusterName(String clusterName) {
+        return KafkaBridgeResources.deploymentName(clusterName);
+    }
+
+    static String kafkaBridgeServiceName(String clusterName) {
+        return KafkaBridgeResources.serviceName(clusterName);
+    }
+
+    static String kafkaBridgeMetricsConfigName(String clusterName) {
+        return KafkaBridgeResources.metricsAndLogConfigMapName(clusterName);
     }
 
     private <T extends CustomResource, L extends CustomResourceList<T>, D extends Doneable<T>>
