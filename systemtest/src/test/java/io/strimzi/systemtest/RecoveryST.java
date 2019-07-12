@@ -4,6 +4,7 @@
  */
 package io.strimzi.systemtest;
 
+import io.strimzi.api.kafka.model.KafkaBridgeResources;
 import io.strimzi.api.kafka.model.KafkaResources;
 import io.strimzi.systemtest.utils.StUtils;
 import io.strimzi.test.timemeasuring.Operation;
@@ -197,12 +198,12 @@ class RecoveryST extends AbstractST {
     void testRecoveryFromKafkaBridgeDeploymentDeletion() {
         operationID = startTimeMeasuring(Operation.CLUSTER_RECOVERY);
         // kafka cluster already deployed
-        String kafkaBridgeDeploymentName = kafkaBridgeClusterName(CLUSTER_NAME);
+        String kafkaBridgeDeploymentName = KafkaBridgeResources.deploymentName(CLUSTER_NAME);
         LOGGER.info("Running deleteKafkaBridgeDeployment with cluster {}", CLUSTER_NAME);
 
         kubeClient().deleteDeployment(kafkaBridgeDeploymentName);
 
-        LOGGER.info("Waiting for deployment {} creation", kafkaBridgeDeploymentName);
+        LOGGER.info("Waiting for deployment {} re-creation", kafkaBridgeDeploymentName);
         cmdKubeClient().waitForResourceCreation(DEPLOYMENT, kafkaBridgeDeploymentName);
 
         TimeMeasuringSystem.stopOperation(operationID);
@@ -214,13 +215,12 @@ class RecoveryST extends AbstractST {
     @Tag(BRIDGE)
     void testRecoveryFromKafkaBridgeServiceDeletion() {
         operationID = startTimeMeasuring(Operation.CLUSTER_RECOVERY);
-        // kafka cluster already deployed
-        String kafkaBridgeServiceName = kafkaBridgeServiceName(CLUSTER_NAME);
+        String kafkaBridgeServiceName = KafkaBridgeResources.serviceName(CLUSTER_NAME);
         LOGGER.info("Running deleteKafkaBridgeService with cluster {}", CLUSTER_NAME);
 
         kubeClient().deleteService(kafkaBridgeServiceName);
 
-        LOGGER.info("Waiting for service {} creation", kafkaBridgeServiceName);
+        LOGGER.info("Waiting for service {} re-creation", kafkaBridgeServiceName);
         cmdKubeClient().waitForResourceCreation(SERVICE, kafkaBridgeServiceName);
 
         TimeMeasuringSystem.stopOperation(operationID);
@@ -232,14 +232,13 @@ class RecoveryST extends AbstractST {
     @Tag(BRIDGE)
     void testRecoveryFromKafkaBridgeMetricsConfigDeletion() {
         operationID = startTimeMeasuring(Operation.CLUSTER_RECOVERY);
-        // kafka cluster already deployed
-        String kafkaBridgeMetricsConfigName = kafkaBridgeMetricsConfigName(CLUSTER_NAME);
+        String kafkaBridgeMetricsConfigName = KafkaBridgeResources.metricsAndLogConfigMapName(CLUSTER_NAME);
         LOGGER.info("Running deleteKafkaBridgeMetricsConfig with cluster {}", CLUSTER_NAME);
 
         kubeClient().deleteConfigMap(kafkaBridgeMetricsConfigName);
         StUtils.waitForConfigMapDeletion(kafkaBridgeMetricsConfigName);
 
-        LOGGER.info("Waiting for metric config {} creation", kafkaBridgeMetricsConfigName);
+        LOGGER.info("Waiting for metric config {} re-creation", kafkaBridgeMetricsConfigName);
         cmdKubeClient().waitForResourceCreation(CM, kafkaBridgeMetricsConfigName);
 
         TimeMeasuringSystem.stopOperation(operationID);
