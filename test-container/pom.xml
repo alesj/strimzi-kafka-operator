@@ -60,7 +60,7 @@
                     <doclint>none</doclint>
                 </configuration>
             </plugin>
-            <plugin>
+            <!-- plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>${exec-maven-plugin.version}</version>
@@ -81,7 +81,7 @@
                     </arguments>
                     <outputFile>./src/main/resources/kafka-versions.txt</outputFile>
                 </configuration>
-            </plugin>
+            </plugin -->
         </plugins>
     </build>
 </project>

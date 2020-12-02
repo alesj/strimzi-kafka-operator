@@ -71,7 +71,7 @@ public class KafkaRollerST extends AbstractST {
         String topicName = KafkaTopicUtils.generateRandomNameOfTopic();
         timeMeasuringSystem.setOperationID(timeMeasuringSystem.startTimeMeasuring(Operation.CLUSTER_RECOVERY));
 
-        KafkaResource.kafkaPersistent(CLUSTER_NAME, 4)
+        KafkaResource.kafkaPersistent(CLUSTER_NAME, 3)
             .editSpec()
                 .editKafka()
                     .addToConfig("auto.create.topics.enable", "false")
@@ -81,9 +81,13 @@ public class KafkaRollerST extends AbstractST {
 
         LOGGER.info("Running kafkaScaleUpScaleDown {}", CLUSTER_NAME);
         final int initialReplicas = kubeClient().getStatefulSet(KafkaResources.kafkaStatefulSetName(CLUSTER_NAME)).getStatus().getReplicas();
-        assertEquals(4, initialReplicas);
+        assertEquals(3, initialReplicas);
 
-        Map<String, String> kafkaPods = StatefulSetUtils.ssSnapshot(KafkaResources.kafkaStatefulSetName(CLUSTER_NAME));
+        int scaledUpReplicas = 4;
+        KafkaResource.replaceKafkaResource(CLUSTER_NAME, k -> k.getSpec().getKafka().setReplicas(scaledUpReplicas));
+        StatefulSetUtils.waitForAllStatefulSetPodsReady(KafkaResources.kafkaStatefulSetName(CLUSTER_NAME), scaledUpReplicas);
+
+        StatefulSetUtils.ssSnapshot(KafkaResources.kafkaStatefulSetName(CLUSTER_NAME));
 
         KafkaTopicResource.topic(CLUSTER_NAME, topicName, 4, 4, 4).done();
 
@@ -104,7 +108,7 @@ public class KafkaRollerST extends AbstractST {
         StatefulSetUtils.waitForAllStatefulSetPodsReady(KafkaResources.kafkaStatefulSetName(CLUSTER_NAME), scaledDownReplicas);
 
         PodUtils.verifyThatRunningPodsAreStable(CLUSTER_NAME);
-        kafkaPods = StatefulSetUtils.ssSnapshot(KafkaResources.kafkaStatefulSetName(CLUSTER_NAME));
+        Map<String, String> kafkaPods = StatefulSetUtils.ssSnapshot(KafkaResources.kafkaStatefulSetName(CLUSTER_NAME));
 
         // set annotation to trigger Kafka rolling update
         kubeClient().statefulSet(KafkaResources.kafkaStatefulSetName(CLUSTER_NAME)).withPropagationPolicy(DeletionPropagation.ORPHAN).edit()
