@@ -6,16 +6,25 @@ package io.strimzi.kafka.crd.convert.converter;
 
 import io.fabric8.kubernetes.api.model.AffinityBuilder;
 import io.fabric8.kubernetes.api.model.TolerationBuilder;
+import io.strimzi.api.annotations.ApiVersion;
 import io.strimzi.api.kafka.model.Kafka;
 import io.strimzi.api.kafka.model.KafkaBuilder;
-import io.strimzi.api.annotations.ApiVersion;
 import io.strimzi.api.kafka.model.listener.arraylistener.KafkaListenerType;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-class KafkaConverterTest {
+abstract class KafkaConverterTestBase {
 
-    private final KafkaConverter kafkaConverter = new KafkaConverter();
+    static class ExtKafkaConverter extends KafkaConverter {
+        public Kafka testConvertTo(Kafka instance, ApiVersion toVersion) {
+            super.convertTo(instance, toVersion);
+            return instance;
+        }
+    }
+    
+    ExtKafkaConverter kafkaConverter() {
+        return new ExtKafkaConverter();
+    }
 
     @Test
     public void testListenersToV1Beta2() {
@@ -38,7 +47,7 @@ class KafkaConverterTest {
                     .endKafka()
                 .endSpec()
                 .build();
-        kafkaConverter.convertTo(converted, ApiVersion.V1BETA2);
+        converted = kafkaConverter().testConvertTo(converted, ApiVersion.V1BETA2);
         Assertions.assertEquals("kafka.strimzi.io/v1beta2", converted.getApiVersion());
         Assertions.assertNotNull(converted.getSpec().getKafka().getListeners());
         Assertions.assertNotNull(converted.getSpec().getKafka().getListeners().getGenericKafkaListeners());
@@ -66,7 +75,7 @@ class KafkaConverterTest {
                 .endKafka()
                 .endSpec()
                 .build();
-        kafkaConverter.convertTo(converted, ApiVersion.V1BETA2);
+        converted = kafkaConverter().testConvertTo(converted, ApiVersion.V1BETA2);
         Assertions.assertEquals("kafka.strimzi.io/v1beta2", converted.getApiVersion());
         Assertions.assertNotNull(converted.getSpec().getKafka().getListeners());
         Assertions.assertNotNull(converted.getSpec().getKafka().getListeners().getGenericKafkaListeners());
@@ -92,7 +101,7 @@ class KafkaConverterTest {
                 .endKafka()
                 .endSpec()
                 .build();
-        kafkaConverter.convertTo(converted, ApiVersion.V1BETA2);
+        converted = kafkaConverter().testConvertTo(converted, ApiVersion.V1BETA2);
         Assertions.assertEquals("kafka.strimzi.io/v1beta2", converted.getApiVersion());
         Assertions.assertNull(converted.getSpec().getKafka().getTolerations());
         Assertions.assertEquals(1, converted.getSpec().getKafka().getTemplate().getPod().getTolerations().size());
@@ -118,7 +127,7 @@ class KafkaConverterTest {
                 .endKafka()
                 .endSpec()
                 .build();
-        kafkaConverter.convertTo(converted, ApiVersion.V1BETA2);
+        converted = kafkaConverter().testConvertTo(converted, ApiVersion.V1BETA2);
         Assertions.assertEquals("kafka.strimzi.io/v1beta2", converted.getApiVersion());
         Assertions.assertNull(converted.getSpec().getKafka().getTolerations());
         Assertions.assertEquals(1, converted.getSpec().getKafka().getTemplate().getPod().getTolerations().size());
@@ -145,7 +154,7 @@ class KafkaConverterTest {
                 .endZookeeper()
                 .endSpec()
                 .build();
-        kafkaConverter.convertTo(converted, ApiVersion.V1BETA2);
+        converted = kafkaConverter().testConvertTo(converted, ApiVersion.V1BETA2);
         Assertions.assertEquals("kafka.strimzi.io/v1beta2", converted.getApiVersion());
         Assertions.assertNull(converted.getSpec().getZookeeper().getTolerations());
         Assertions.assertEquals(1, converted.getSpec().getZookeeper().getTemplate().getPod().getTolerations().size());
@@ -170,7 +179,7 @@ class KafkaConverterTest {
                 .endZookeeper()
                 .endSpec()
                 .build();
-        kafkaConverter.convertTo(converted, ApiVersion.V1BETA2);
+        converted = kafkaConverter().testConvertTo(converted, ApiVersion.V1BETA2);
         Assertions.assertEquals("kafka.strimzi.io/v1beta2", converted.getApiVersion());
         Assertions.assertNull(converted.getSpec().getZookeeper().getTolerations());
         Assertions.assertEquals(1, converted.getSpec().getZookeeper().getTemplate().getPod().getTolerations().size());
@@ -198,8 +207,7 @@ class KafkaConverterTest {
                 .endKafka()
                 .endSpec()
                 .build();
-        kafkaConverter.convertTo(converted,
-                ApiVersion.V1BETA2);
+        converted = kafkaConverter().testConvertTo(converted, ApiVersion.V1BETA2);
         Assertions.assertEquals("kafka.strimzi.io/v1beta2", converted.getApiVersion());
         Assertions.assertNull(converted.getSpec().getKafka().getAffinity());
         Assertions.assertNotNull(converted.getSpec().getKafka().getTemplate().getPod().getAffinity());
@@ -225,8 +233,7 @@ class KafkaConverterTest {
                 .endKafka()
                 .endSpec()
                 .build();
-        kafkaConverter.convertTo(converted,
-                ApiVersion.V1BETA1);
+        converted = kafkaConverter().testConvertTo(converted, ApiVersion.V1BETA1);
         Assertions.assertEquals("kafka.strimzi.io/v1beta1", converted.getApiVersion());
         Assertions.assertNull(converted.getSpec().getKafka().getAffinity());
         Assertions.assertNotNull(converted.getSpec().getKafka().getTemplate().getPod().getAffinity());
@@ -252,8 +259,7 @@ class KafkaConverterTest {
                 .endZookeeper()
                 .endSpec()
                 .build();
-        kafkaConverter.convertTo(converted,
-                ApiVersion.V1BETA1);
+        converted = kafkaConverter().testConvertTo(converted, ApiVersion.V1BETA1);
         Assertions.assertEquals("kafka.strimzi.io/v1beta1", converted.getApiVersion());
         Assertions.assertNull(converted.getSpec().getZookeeper().getAffinity());
         Assertions.assertNotNull(converted.getSpec().getZookeeper().getTemplate().getPod().getAffinity());
@@ -281,8 +287,7 @@ class KafkaConverterTest {
                 .endZookeeper()
                 .endSpec()
                 .build();
-        kafkaConverter.convertTo(converted,
-                ApiVersion.V1BETA2);
+        converted = kafkaConverter().testConvertTo(converted, ApiVersion.V1BETA2);
         Assertions.assertEquals("kafka.strimzi.io/v1beta2", converted.getApiVersion());
         Assertions.assertNull(converted.getSpec().getZookeeper().getAffinity());
         Assertions.assertNotNull(converted.getSpec().getZookeeper().getTemplate().getPod().getAffinity());
@@ -307,7 +312,7 @@ class KafkaConverterTest {
                 .build();
         Assertions.assertNotNull(converted.getSpec().getKafka());
         Assertions.assertNotNull(converted.getSpec().getKafka().getTlsSidecar());
-        kafkaConverter.convertTo(converted, ApiVersion.V1BETA2);
+        converted = kafkaConverter().testConvertTo(converted, ApiVersion.V1BETA2);
         Assertions.assertEquals("kafka.strimzi.io/v1beta2", converted.getApiVersion());
         Assertions.assertNotNull(converted.getSpec().getKafka());
         Assertions.assertNull(converted.getSpec().getKafka().getTlsSidecar());
@@ -331,7 +336,7 @@ class KafkaConverterTest {
                 .build();
         Assertions.assertNotNull(converted.getSpec().getZookeeper());
         Assertions.assertNotNull(converted.getSpec().getZookeeper().getTlsSidecar());
-        kafkaConverter.convertTo(converted, ApiVersion.V1BETA2);
+        converted = kafkaConverter().testConvertTo(converted, ApiVersion.V1BETA2);
         Assertions.assertEquals("kafka.strimzi.io/v1beta2", converted.getApiVersion());
         Assertions.assertNotNull(converted.getSpec().getZookeeper());
         Assertions.assertNull(converted.getSpec().getZookeeper().getTlsSidecar());
@@ -351,8 +356,7 @@ class KafkaConverterTest {
                     .endTopicOperator()
                 .endSpec()
                 .build();
-        kafkaConverter.convertTo(converted,
-                ApiVersion.V1BETA2);
+        converted = kafkaConverter().testConvertTo(converted, ApiVersion.V1BETA2);
         Assertions.assertEquals("kafka.strimzi.io/v1beta2", converted.getApiVersion());
         Assertions.assertNotNull(converted.getSpec().getEntityOperator().getTopicOperator());
         converted = new KafkaBuilder()
@@ -363,8 +367,7 @@ class KafkaConverterTest {
                 .endTopicOperator()
             .endSpec()
             .build();
-        kafkaConverter.convertTo(converted,
-                ApiVersion.V1BETA2);
+        converted = kafkaConverter().testConvertTo(converted, ApiVersion.V1BETA2);
         Assertions.assertEquals("kafka.strimzi.io/v1beta2", converted.getApiVersion());
         Assertions.assertNotNull(converted.getSpec().getEntityOperator().getTopicOperator());
         Assertions.assertEquals("foo", converted.getSpec().getEntityOperator().getTopicOperator().getImage());

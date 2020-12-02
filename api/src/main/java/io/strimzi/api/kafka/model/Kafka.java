@@ -107,7 +107,7 @@ public class Kafka extends CustomResource implements HasSpecAndStatus<KafkaSpec,
     public static final List<String> RESOURCE_SHORTNAMES = unmodifiableList(singletonList(SHORT_NAME));
 
     private String apiVersion;
-    private ObjectMeta metadata;
+    private ObjectMeta metadata; // leave it for the generator / builder
     private KafkaSpec spec;
     private Map<String, Object> additionalProperties = new HashMap<>(0);
     private KafkaStatus status;

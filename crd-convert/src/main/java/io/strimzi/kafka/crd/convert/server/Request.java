@@ -13,6 +13,7 @@ class Request {
     String uid;
     String desiredAPIVersion;
     List<JsonNode> objects;
+    boolean instantiate;
 
     public String getUid() {
         return uid;
@@ -38,12 +39,21 @@ class Request {
         this.objects = objects;
     }
 
+    public boolean isInstantiate() {
+        return instantiate;
+    }
+
+    public void setInstantiate(boolean instantiate) {
+        this.instantiate = instantiate;
+    }
+
     @Override
     public String toString() {
         return "Request(" +
                 "uid='" + uid + '\'' +
                 ", desiredAPIVersion='" + desiredAPIVersion + '\'' +
                 ", objects=" + objects +
+                ", instantiate=" + instantiate +
                 ')';
     }
 }
