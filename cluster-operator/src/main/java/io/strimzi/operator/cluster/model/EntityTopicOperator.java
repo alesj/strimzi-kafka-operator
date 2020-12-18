@@ -82,6 +82,12 @@ public class EntityTopicOperator extends AbstractModel {
         this.livenessPath = "/";
         this.livenessProbeOptions = DEFAULT_HEALTHCHECK_OPTIONS;
 
+        // new KafkaStreamsTopicStore needs a bit more to start
+        this.startupProbeOptions = new ProbeBuilder()
+                .withPeriodSeconds(10)
+                .withFailureThreshold(12)
+                .build();
+
         // create a default configuration
         this.kafkaBootstrapServers = defaultBootstrapServers(cluster);
         this.zookeeperConnect = defaultZookeeperConnect(cluster);
@@ -221,6 +227,9 @@ public class EntityTopicOperator extends AbstractModel {
                 }
                 result.setJvmOptions(topicOperatorSpec.getJvmOptions());
                 result.setResources(topicOperatorSpec.getResources());
+                if (topicOperatorSpec.getStartupProbe() != null) {
+                    result.setStartupProbe(topicOperatorSpec.getStartupProbe());
+                }
                 if (topicOperatorSpec.getReadinessProbe() != null) {
                     result.setReadinessProbe(topicOperatorSpec.getReadinessProbe());
                 }
@@ -241,6 +250,7 @@ public class EntityTopicOperator extends AbstractModel {
                 .withArgs("/opt/strimzi/bin/topic_operator_run.sh")
                 .withEnv(getEnvVars())
                 .withPorts(singletonList(createContainerPort(HEALTHCHECK_PORT_NAME, HEALTHCHECK_PORT, "TCP")))
+                .withStartupProbe(ProbeGenerator.httpProbe(startupProbeOptions, livenessPath + "healthy", HEALTHCHECK_PORT_NAME))
                 .withLivenessProbe(ProbeGenerator.httpProbe(livenessProbeOptions, livenessPath + "healthy", HEALTHCHECK_PORT_NAME))
                 .withReadinessProbe(ProbeGenerator.httpProbe(readinessProbeOptions, readinessPath + "ready", HEALTHCHECK_PORT_NAME))
                 .withResources(getResources())

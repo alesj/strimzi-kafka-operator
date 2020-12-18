@@ -68,8 +68,8 @@ import io.strimzi.api.kafka.model.storage.JbodStorage;
 import io.strimzi.api.kafka.model.storage.PersistentClaimStorage;
 import io.strimzi.api.kafka.model.storage.PersistentClaimStorageOverride;
 import io.strimzi.api.kafka.model.storage.Storage;
-import io.strimzi.operator.cluster.ClusterOperator;
 import io.strimzi.api.kafka.model.template.PodManagementPolicy;
+import io.strimzi.operator.cluster.ClusterOperator;
 import io.strimzi.operator.common.Annotations;
 import io.strimzi.operator.common.Util;
 import io.strimzi.operator.common.model.Labels;
@@ -227,6 +227,7 @@ public abstract class AbstractModel {
      * Container configuration
      */
     private ResourceRequirements resources;
+    protected io.strimzi.api.kafka.model.Probe startupProbeOptions;
     protected String readinessPath;
     protected io.strimzi.api.kafka.model.Probe readinessProbeOptions;
     protected String livenessPath;
@@ -294,6 +295,10 @@ public abstract class AbstractModel {
 
     protected void setLivenessProbe(io.strimzi.api.kafka.model.Probe probe) {
         this.livenessProbeOptions = probe;
+    }
+
+    protected void setStartupProbe(io.strimzi.api.kafka.model.Probe probe) {
+        this.startupProbeOptions = probe;
     }
 
     /**
