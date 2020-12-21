@@ -32,50 +32,37 @@ public class Zk2KafkaStreams {
 
         log.info("Upgrading topic store [{}]: {}", doStop, topicsPath);
 
-        TopicStore zkTopicStore = new ZkTopicStore(zk, topicsPath);
+        TopicStore zkTopicStore = new TempZkTopicStore(zk, topicsPath);
         KafkaStreamsTopicStoreService service = new KafkaStreamsTopicStoreService();
         return service.start(config, kafkaProperties)
                 .thenCompose(ksTopicStore -> {
                     log.info("Starting upgrade ...");
-                    CompletableFuture<Void> cf = new CompletableFuture<>();
-                    zk.children(topicsPath, result -> {
-                        log.info("ZK children: {}", result);
-                        if (result.failed()) {
-                            cf.completeExceptionally(result.cause());
+                    @SuppressWarnings("rawtypes")
+                    List<Future> results = new ArrayList<>();
+                    List<String> list = zk.getChildren(topicsPath);
+                    log.info("Topics to upgrade: {}", list);
+                    list.forEach(topicName -> {
+                        TopicName tn = new TopicName(topicName);
+                        Future<Topic> ft = zkTopicStore.read(tn);
+                        results.add(ft.compose(ksTopicStore::create).compose(v -> zkTopicStore.delete(tn)));
+                    });
+                    CompletableFuture<Void> result = new CompletableFuture<>();
+                    CompositeFuture cf = CompositeFuture.all(results);
+                    cf.onComplete(ar -> {
+                        if (ar.failed()) {
+                            result.completeExceptionally(ar.cause());
                         } else {
-                            result.map(list -> {
-                                log.info("Topics to upgrade: {}", list);
-                                @SuppressWarnings("rawtypes")
-                                List<Future> results = new ArrayList<>();
-                                list.forEach(topicName -> {
-                                    Future<Topic> ft = zkTopicStore.read(new TopicName(topicName));
-                                    results.add(
-                                            ft.onSuccess(ksTopicStore::create)
-                                                    .onSuccess(t1 -> zkTopicStore.delete(t1.getTopicName()))
-                                    );
-                                });
-                                return CompositeFuture.all(results);
-                            }).result().onComplete(ar -> {
-                                log.info("Topics moved: {}", ar);
-                                if (ar.failed()) {
-                                    cf.completeExceptionally(ar.cause());
-                                } else {
-                                    log.info("Deleting ZK topics path: {}", topicsPath);
-                                    zk.delete(topicsPath, -1, v -> {
-                                        log.info("Delete ZK topics path: {} -- {}", topicsPath, v);
-                                        if (v.failed()) {
-                                            cf.completeExceptionally(v.cause());
-                                        } else {
-                                            cf.complete(null);
-                                        }
-                                    });
-                                }
-                            });
+                            result.complete(null);
                         }
                     });
-                    return cf;
+                    return result;
                 })
-                .whenComplete((v, t) -> {
+                .thenRun(() -> {
+                    log.info("Deleting ZK topics path: {}", topicsPath);
+                    zk.delete(topicsPath, -1);
+                })
+                .whenCompleteAsync((v, t) -> {
+                    // stop in another thread
                     if (doStop || t != null) {
                         service.stop();
                     }
