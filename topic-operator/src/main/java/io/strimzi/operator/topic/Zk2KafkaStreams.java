@@ -30,18 +30,21 @@ public class Zk2KafkaStreams {
     ) {
         String topicsPath = config.get(Config.TOPICS_PATH);
 
-        log.info("Upgrading topic store: {}", topicsPath);
+        log.info("Upgrading topic store [{}]: {}", doStop, topicsPath);
 
         TopicStore zkTopicStore = new ZkTopicStore(zk, topicsPath);
         KafkaStreamsTopicStoreService service = new KafkaStreamsTopicStoreService();
         return service.start(config, kafkaProperties)
                 .thenCompose(ksTopicStore -> {
+                    log.info("Starting upgrade ...");
                     CompletableFuture<Void> cf = new CompletableFuture<>();
                     zk.children(topicsPath, result -> {
+                        log.info("ZK children: {}", result);
                         if (result.failed()) {
                             cf.completeExceptionally(result.cause());
                         } else {
                             result.map(list -> {
+                                log.info("Topics to upgrade: {}", list);
                                 @SuppressWarnings("rawtypes")
                                 List<Future> results = new ArrayList<>();
                                 list.forEach(topicName -> {
@@ -53,10 +56,13 @@ public class Zk2KafkaStreams {
                                 });
                                 return CompositeFuture.all(results);
                             }).result().onComplete(ar -> {
+                                log.info("Topics moved: {}", ar);
                                 if (ar.failed()) {
                                     cf.completeExceptionally(ar.cause());
                                 } else {
+                                    log.info("Deleting ZK topics path: {}", topicsPath);
                                     zk.delete(topicsPath, -1, v -> {
+                                        log.info("Delete ZK topics path: {} -- {}", topicsPath, v);
                                         if (v.failed()) {
                                             cf.completeExceptionally(v.cause());
                                         } else {
@@ -73,6 +79,7 @@ public class Zk2KafkaStreams {
                     if (doStop || t != null) {
                         service.stop();
                     }
+                    log.info("Upgrade complete", t);
                 })
                 .thenApply(v -> service);
     }

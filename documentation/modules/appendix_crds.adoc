@@ -1477,6 +1477,8 @@ Used in: xref:type-KafkaSpec-{context}[`KafkaSpec`]
 |xref:type-Probe-{context}[`Probe`]
 |readinessProbe                  1.2+<.<|Pod readiness checking.
 |xref:type-Probe-{context}[`Probe`]
+|startupProbe                    1.2+<.<|Pod startup checking.
+|xref:type-Probe-{context}[`Probe`]
 |====
 
 [id='type-EntityOperatorSpec-{context}']
@@ -1523,6 +1525,8 @@ Used in: xref:type-EntityOperatorSpec-{context}[`EntityOperatorSpec`]
 |integer
 |zookeeperSessionTimeoutSeconds  1.2+<.<|Timeout for the ZooKeeper session.
 |integer
+|startupProbe                    1.2+<.<|Pod startup checking.
+|xref:type-Probe-{context}[`Probe`]
 |livenessProbe                   1.2+<.<|Pod liveness checking.
 |xref:type-Probe-{context}[`Probe`]
 |readinessProbe                  1.2+<.<|Pod readiness checking.
