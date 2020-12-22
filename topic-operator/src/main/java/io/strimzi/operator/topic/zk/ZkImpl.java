@@ -46,6 +46,9 @@ public class ZkImpl implements Zk {
         this.zookeeper = zkClient;
     }
 
+    private WorkerExecutor workerPool() {
+        return vertx.createSharedWorkerExecutor(getClass().getName(), 16);
+    }
 
     @Override
     public Zk create(String path, byte[] data, List<ACL> acls, CreateMode createMode, Handler<AsyncResult<Void>> handler) {
@@ -185,10 +188,6 @@ public class ZkImpl implements Zk {
             },
             handler);
         return this;
-    }
-
-    private WorkerExecutor workerPool() {
-        return vertx.createSharedWorkerExecutor(getClass().getName(), 4);
     }
 
     @Override

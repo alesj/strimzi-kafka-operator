@@ -191,19 +191,20 @@ public class Session extends AbstractVerticle {
                 if (config.get(Config.USE_ZOOKEEPER_TOPIC_STORE)) {
                     topicStore = new ZkTopicStore(zk, topicsPath);
                 } else {
-                    boolean exists = zk.getPathExists(topicsPath);
-                    CompletionStage<KafkaStreamsTopicStoreService> cs;
-                    if (exists) {
-                        cs = Zk2KafkaStreams.upgrade(zk, config, kafkaClientProps, false);
-                    } else {
-                        KafkaStreamsTopicStoreService ksc = new KafkaStreamsTopicStoreService();
-                        cs = ksc.start(config, kafkaClientProps).thenCompose(s -> CompletableFuture.completedFuture(ksc));
-                    }
-                    topicStore = ConcurrentUtil.result(
-                            cs.thenApply(s -> {
-                                service = s;
-                                return s.store;
-                            }));
+                    CompletionStage<Boolean> topicPathExists = zk.pathExists(topicsPath).toCompletionStage();
+                    topicStore = ConcurrentUtil.result(topicPathExists.thenCompose(exists -> {
+                        if (exists) {
+                            return Zk2KafkaStreams.upgrade(zk, config, kafkaClientProps, false);
+                        } else {
+                            KafkaStreamsTopicStoreService ksc = new KafkaStreamsTopicStoreService();
+                            return ksc.start(config, kafkaClientProps)
+                                    .thenCompose(s -> CompletableFuture.completedFuture(ksc));
+                        }
+
+                    }).thenApply(s -> {
+                        service = s;
+                        return s.store;
+                    }));
                 }
 
                 LOGGER.debug("Using TopicStore {}", topicStore);
