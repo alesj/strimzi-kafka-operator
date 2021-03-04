@@ -11,7 +11,6 @@ import io.apicurio.registry.utils.streams.ext.ForeachActionDispatcher;
 import io.apicurio.registry.utils.streams.ext.LoggingStateRestoreListener;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serdes;
@@ -30,6 +29,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.lang.Integer.parseInt;
+import static io.strimzi.operator.topic.KafkaImpl.toCompletionStage;
 
 /**
  * A service to configure and start/stop KafkaStreamsTopicStore.
@@ -49,9 +49,9 @@ public class KafkaStreamsTopicStoreService {
         // check if entry topic has the right configuration
         Admin admin = Admin.create(kafkaProperties);
         log.info("Starting ...");
-        return toCS(admin.describeCluster().nodes())
+        return toCompletionStage(admin.describeCluster().nodes())
                 .thenApply(nodes -> new Context(nodes.size()))
-                .thenCompose(c -> toCS(admin.listTopics().names()).thenApply(c::setTopics))
+                .thenCompose(c -> toCompletionStage(admin.listTopics().names()).thenApply(c::setTopics))
                 .thenCompose(c -> {
                     if (c.topics.contains(storeTopic)) {
                         return validateExistingStoreTopic(storeTopic, admin, c);
@@ -131,15 +131,15 @@ public class KafkaStreamsTopicStoreService {
         int minISR = Math.max(rf - 1, 1);
         NewTopic newTopic = new NewTopic(storeTopic, 1, (short) rf)
             .configs(Collections.singletonMap(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, String.valueOf(minISR)));
-        return toCS(admin.createTopics(Collections.singleton(newTopic)).all());
+        return toCompletionStage(admin.createTopics(Collections.singleton(newTopic)).all());
     }
 
     private CompletionStage<Void> validateExistingStoreTopic(String storeTopic, Admin admin, Context c) {
         log.info("Validating existing store topic: {}", storeTopic);
         ConfigResource storeTopicConfigResource = new ConfigResource(ConfigResource.Type.TOPIC, storeTopic);
-        return toCS(admin.describeTopics(Collections.singleton(storeTopic)).values().get(storeTopic))
+        return toCompletionStage(admin.describeTopics(Collections.singleton(storeTopic)).values().get(storeTopic))
             .thenApply(td -> c.setRf(td.partitions().stream().map(tp -> tp.replicas().size()).min(Integer::compare).orElseThrow()))
-            .thenCompose(c2 -> toCS(admin.describeConfigs(Collections.singleton(storeTopicConfigResource)).values().get(storeTopicConfigResource))
+            .thenCompose(c2 -> toCompletionStage(admin.describeConfigs(Collections.singleton(storeTopicConfigResource)).values().get(storeTopicConfigResource))
                     .thenApply(cr -> c2.setMinISR(parseInt(cr.get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value()))))
             .thenApply(c3 -> {
                 if (c3.rf != Math.min(3, c3.clusterSize) || c3.minISR != c3.rf - 1) {
@@ -163,18 +163,6 @@ public class KafkaStreamsTopicStoreService {
         } catch (Exception e) {
             log.warn("Exception while closing service: {}", service, e);
         }
-    }
-
-    private static <T> CompletionStage<T> toCS(KafkaFuture<T> kf) {
-        CompletableFuture<T> cf = new CompletableFuture<>();
-        kf.whenComplete((v, t) -> {
-            if (t != null) {
-                cf.completeExceptionally(t);
-            } else {
-                cf.complete(v);
-            }
-        });
-        return cf;
     }
 
     static class Context {

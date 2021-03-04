@@ -37,16 +37,14 @@ public class ZkTopicsWatcherTest {
         mockZk.childrenResult = Future.succeededFuture(asList("foo", "bar"));
         mockZk.dataResult = Future.succeededFuture(new byte[0]);
 
-        TopicConfigsWatcher topicConfigsWatcher = new TopicConfigsWatcher(operator);
-        ZkTopicWatcher topicWatcher = new ZkTopicWatcher(operator);
-        ZkTopicsWatcher topicsWatcher = new ZkTopicsWatcher(operator, topicConfigsWatcher, topicWatcher);
-        topicsWatcher.start(mockZk);
+        ZkTopicsWatcher topicsWatcher = new ZkTopicsWatcher(operator, mockZk);
+        topicsWatcher.start();
         mockZk.triggerChildren(Future.succeededFuture(asList("foo", "bar", "baz")));
 
         assertThat(operator.getMockOperatorEvents(),
                 is(asList(new MockTopicOperator.MockOperatorEvent(Type.CREATE, new TopicName("baz")))));
-        assertThat(topicConfigsWatcher.watching("baz"), is(true));
-        assertThat(topicWatcher.watching("baz"), is(true));
+        assertThat(topicsWatcher.tcw.watching("baz"), is(true));
+        assertThat(topicsWatcher.tw.watching("baz"), is(true));
     }
 
     @Test
@@ -71,14 +69,12 @@ public class ZkTopicsWatcherTest {
         operator.topicDeletedResult = Future.succeededFuture();
         mockZk.childrenResult = Future.succeededFuture(asList("foo", "bar"));
 
-        TopicConfigsWatcher topicConfigsWatcher = new TopicConfigsWatcher(operator);
-        ZkTopicWatcher topicWatcher = new ZkTopicWatcher(operator);
-        ZkTopicsWatcher topicsWatcher = new ZkTopicsWatcher(operator, topicConfigsWatcher, topicWatcher);
-        topicsWatcher.start(mockZk);
+        ZkTopicsWatcher topicsWatcher = new ZkTopicsWatcher(operator, mockZk);
+        topicsWatcher.start();
         mockZk.triggerChildren(Future.succeededFuture(asList("foo")));
 
         assertThat(operator.getMockOperatorEvents(), is(asList(new MockTopicOperator.MockOperatorEvent(
                 Type.DELETE, new TopicName("bar")))));
-        assertThat(topicConfigsWatcher.watching("baz"), is(false));
+        assertThat(topicsWatcher.tcw.watching("baz"), is(false));
     }
 }

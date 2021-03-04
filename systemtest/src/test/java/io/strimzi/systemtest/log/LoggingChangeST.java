@@ -1148,7 +1148,7 @@ class LoggingChangeST extends AbstractST {
                 .editKafka()
                 .withExternalLogging(new ExternalLoggingBuilder()
                     .withNewValueFrom()
-                        .withNewConfigMapKeyRef("log4j.properties", "external-cm", false)
+                        //.withNewConfigMapKeyRef("log4j.properties", "external-cm", false)
                     .endValueFrom()
                     .build())
                 .endKafka()
@@ -1166,7 +1166,7 @@ class LoggingChangeST extends AbstractST {
         KafkaResource.replaceKafkaResource(clusterName, kafka -> kafka.getSpec().getKafka().setLogging(
             new ExternalLoggingBuilder()
                 .withNewValueFrom()
-                    .withNewConfigMapKeyRef("log4j.properties", "not-existing-cm-name", false)
+                    //.withNewConfigMapKeyRef("log4j.properties", "not-existing-cm-name", false)
                 .endValueFrom()
                 .build()));
 

@@ -21,6 +21,7 @@ import io.vertx.core.Handler;
 import io.vertx.core.Promise;
 import io.vertx.core.http.HttpServer;
 import io.vertx.micrometer.backends.BackendRegistries;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.config.SslConfigs;
@@ -51,9 +52,7 @@ public class Session extends AbstractVerticle {
     private KafkaStreamsTopicStoreService service; // if used
     /*test*/ TopicOperator topicOperator;
     /*test*/ Watch topicWatch;
-    /*test*/ ZkTopicsWatcher topicsWatcher;
-    /*test*/ TopicConfigsWatcher topicConfigsWatcher;
-    /*test*/ ZkTopicWatcher topicWatcher;
+    /*test*/ TopicOperatorWatcher topicOperatorWatcher;
     /*test*/ PrometheusMeterRegistry metricsRegistry;
     K8sTopicWatcher watcher;
     /** The id of the periodic reconciliation timer. This is null during a periodic reconciliation. */
@@ -89,8 +88,8 @@ public class Session extends AbstractVerticle {
             LOGGER.info("Stopping");
             LOGGER.debug("Stopping kube watch");
             topicWatch.close();
-            LOGGER.debug("Stopping zk watches");
-            topicsWatcher.stop();
+            LOGGER.debug("Stopping topics watches");
+            topicOperatorWatcher.stop();
 
             Promise<Void> promise = Promise.promise();
             Handler<Long> longHandler = new Handler<>() {
@@ -118,30 +117,37 @@ public class Session extends AbstractVerticle {
             });
 
             promise.future().compose(ignored -> {
-
-                LOGGER.debug("Disconnecting from zookeeper {}", zk);
-                zk.disconnect(zkResult -> {
-                    if (zkResult.failed()) {
-                        LOGGER.warn("Error disconnecting from zookeeper: {}", String.valueOf(zkResult.cause()));
-                    }
-                    long timeoutMs = Math.max(1, deadline - System.currentTimeMillis());
-                    LOGGER.debug("Closing AdminClient {} with timeout {}ms", adminClient, timeoutMs);
-                    try {
-                        adminClient.close(Duration.ofMillis(timeoutMs));
-                        HttpServer healthServer = this.healthServer;
-                        if (healthServer != null) {
-                            healthServer.close();
+                if (zk != null) {
+                    LOGGER.debug("Disconnecting from zookeeper {}", zk);
+                    zk.disconnect(zkResult -> {
+                        if (zkResult.failed()) {
+                            LOGGER.warn("Error disconnecting from zookeeper: {}", String.valueOf(zkResult.cause()));
                         }
-                    } catch (TimeoutException e) {
-                        LOGGER.warn("Timeout while closing AdminClient with timeout {}ms", timeoutMs, e);
-                    } finally {
-                        LOGGER.info("Stopped");
-                        blockingResult.complete();
-                    }
-                });
+                    });
+                } else {
+                    // TODO
+                }
+                shutdown(blockingResult, deadline);
                 return Future.succeededFuture();
             });
         }, stop);
+    }
+
+    private void shutdown(Promise<Void> blockingResult, long deadline) {
+        long timeoutMs = Math.max(1, deadline - System.currentTimeMillis());
+        LOGGER.debug("Closing AdminClient {} with timeout {}ms", adminClient, timeoutMs);
+        try {
+            adminClient.close(Duration.ofMillis(timeoutMs));
+            HttpServer healthServer = this.healthServer;
+            if (healthServer != null) {
+                healthServer.close();
+            }
+        } catch (TimeoutException e) {
+            LOGGER.warn("Timeout while closing AdminClient with timeout {}ms", timeoutMs, e);
+        } finally {
+            LOGGER.info("Stopped");
+            blockingResult.complete();
+        }
     }
 
     @Override
@@ -151,7 +157,7 @@ public class Session extends AbstractVerticle {
 
         String dnsCacheTtl = System.getenv("STRIMZI_DNS_CACHE_TTL") == null ? "30" : System.getenv("STRIMZI_DNS_CACHE_TTL");
         Security.setProperty("networkaddress.cache.ttl", dnsCacheTtl);
-        kafkaClientProps.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, config.get(Config.KAFKA_BOOTSTRAP_SERVERS));
+        kafkaClientProps.setProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, config.get(Config.KAFKA_BOOTSTRAP_SERVERS));
         kafkaClientProps.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, config.get(Config.APPLICATION_ID));
 
         if (Boolean.parseBoolean(config.get(Config.TLS_ENABLED))) {
@@ -177,92 +183,119 @@ public class Session extends AbstractVerticle {
         String clientId = config.get(Config.CLIENT_ID);
         LOGGER.debug("Using client-Id {}", clientId);
 
-        Zk.create(vertx, config.get(Config.ZOOKEEPER_CONNECT),
+        if (config.get(Config.USE_RAFT_KAFKA)) {
+            KafkaStreamsTopicStoreService ksc = new KafkaStreamsTopicStoreService();
+            CompletionStage<KafkaStreamsTopicStoreService> cs = ksc.start(config, kafkaClientProps).thenCompose(s -> CompletableFuture.completedFuture(ksc));
+            TopicStore topicStore = getTopicStore(start, cs);
+            if (topicStore == null) {
+                return; // [1]
+            }
+
+            LOGGER.debug("Using TopicStore {}", topicStore);
+
+            this.topicOperator = new TopicOperator(vertx, kafka, k8s, topicStore, labels, namespace, config, new MicrometerMetricsProvider());
+            LOGGER.debug("Using Operator {}", topicOperator);
+
+            this.topicOperatorWatcher = new RaftTopicsWatcher(topicOperator, config, kafkaClientProps);
+            LOGGER.debug("Using TopicsWatcher {}", topicOperatorWatcher);
+            topicOperatorWatcher.start();
+
+            startK8sWatcher(start);
+
+            LOGGER.info("Started in RAFT mode ...");
+        } else {
+            Zk.create(vertx, config.get(Config.ZOOKEEPER_CONNECT),
                 this.config.get(Config.ZOOKEEPER_SESSION_TIMEOUT_MS).intValue(),
                 this.config.get(Config.ZOOKEEPER_CONNECTION_TIMEOUT_MS).intValue(),
-            zkResult -> {
-                if (zkResult.failed()) {
-                    start.fail(zkResult.cause());
-                    return;
-                }
-                this.zk = zkResult.result();
-                LOGGER.debug("Using ZooKeeper {}", zk);
+                zkResult -> {
+                    if (zkResult.failed()) {
+                        start.fail(zkResult.cause());
+                        return;
+                    }
+                    this.zk = zkResult.result();
+                    LOGGER.debug("Using ZooKeeper {}", zk);
 
-                String topicsPath = config.get(Config.TOPICS_PATH);
-                TopicStore topicStore;
-                if (config.get(Config.USE_ZOOKEEPER_TOPIC_STORE)) {
-                    topicStore = new ZkTopicStore(zk, topicsPath);
-                } else {
-                    boolean exists = zk.getPathExists(topicsPath);
-                    CompletionStage<KafkaStreamsTopicStoreService> cs;
-                    if (exists) {
-                        cs = Zk2KafkaStreams.upgrade(zk, config, kafkaClientProps, false);
+                    String topicsPath = config.get(Config.TOPICS_PATH);
+                    TopicStore topicStore;
+                    if (config.get(Config.USE_ZOOKEEPER_TOPIC_STORE)) {
+                        topicStore = new ZkTopicStore(zk, topicsPath);
                     } else {
-                        KafkaStreamsTopicStoreService ksc = new KafkaStreamsTopicStoreService();
-                        cs = ksc.start(config, kafkaClientProps).thenCompose(s -> CompletableFuture.completedFuture(ksc));
-                    }
-                    topicStore = ConcurrentUtil.result(
-                            cs.handle((s, t) -> {
-                                if (t != null) {
-                                    LOGGER.error("Failed to create topic store.", t);
-                                    start.fail(t);
-                                    return null; // [1]
-                                } else {
-                                    service = s;
-                                    return s.store;
-                                }
-                            }));
-                    if (topicStore == null) {
-                        return; // [1]
-                    }
-                }
-
-                LOGGER.debug("Using TopicStore {}", topicStore);
-
-                this.topicOperator = new TopicOperator(vertx, kafka, k8s, topicStore, labels, namespace, config, new MicrometerMetricsProvider());
-                LOGGER.debug("Using Operator {}", topicOperator);
-
-                this.topicConfigsWatcher = new TopicConfigsWatcher(topicOperator);
-                LOGGER.debug("Using TopicConfigsWatcher {}", topicConfigsWatcher);
-                this.topicWatcher = new ZkTopicWatcher(topicOperator);
-                LOGGER.debug("Using TopicWatcher {}", topicWatcher);
-                this.topicsWatcher = new ZkTopicsWatcher(topicOperator, topicConfigsWatcher, topicWatcher);
-                LOGGER.debug("Using TopicsWatcher {}", topicsWatcher);
-                topicsWatcher.start(zk);
-
-                Promise<Void> initReconcilePromise = Promise.promise();
-
-                watcher = new K8sTopicWatcher(topicOperator, initReconcilePromise.future(), this::startWatcher);
-                LOGGER.debug("Starting watcher");
-                startWatcher().compose(
-                    ignored -> {
-                        LOGGER.debug("Starting health server");
-                        Session.this.healthServer = startHealthServer();
-                        return Future.<Void>succeededFuture();
-                    }).onComplete(start);
-
-                final Long interval = config.get(Config.FULL_RECONCILIATION_INTERVAL_MS);
-                Handler<Long> periodic = new Handler<>() {
-                    @Override
-                    public void handle(Long oldTimerId) {
-                        if (!stopped) {
-                            timerId = null;
-                            boolean isInitialReconcile = oldTimerId == null;
-                            topicOperator.getPeriodicReconciliationsCounter().increment();
-                            topicOperator.reconcileAllTopics(isInitialReconcile ? "initial " : "periodic ").onComplete(result -> {
-                                if (isInitialReconcile) {
-                                    initReconcilePromise.complete();
-                                }
-                                if (!stopped) {
-                                    timerId = vertx.setTimer(interval, this);
-                                }
-                            });
+                        boolean exists = zk.getPathExists(topicsPath);
+                        CompletionStage<KafkaStreamsTopicStoreService> cs;
+                        if (exists) {
+                            cs = Zk2KafkaStreams.upgrade(zk, config, kafkaClientProps, false);
+                        } else {
+                            KafkaStreamsTopicStoreService ksc = new KafkaStreamsTopicStoreService();
+                            cs = ksc.start(config, kafkaClientProps).thenCompose(s -> CompletableFuture.completedFuture(ksc));
+                        }
+                        topicStore = getTopicStore(start, cs);
+                        if (topicStore == null) {
+                            return; // [1]
                         }
                     }
-                };
-                periodic.handle(null);
-                LOGGER.info("Started");
-            });
+
+                    LOGGER.debug("Using TopicStore {}", topicStore);
+
+                    this.topicOperator = new TopicOperator(vertx, kafka, k8s, topicStore, labels, namespace, config, new MicrometerMetricsProvider());
+                    LOGGER.debug("Using Operator {}", topicOperator);
+
+                    this.topicOperatorWatcher = new ZkTopicsWatcher(topicOperator, zk);
+                    LOGGER.debug("Using TopicsWatcher {}", topicOperatorWatcher);
+                    topicOperatorWatcher.start();
+
+                    startK8sWatcher(start);
+
+                    LOGGER.info("Started in legacy (ZooKeeper) mode ...");
+                });
+        }
+    }
+
+    private TopicStore getTopicStore(Promise<Void> start, CompletionStage<KafkaStreamsTopicStoreService> cs) {
+        return ConcurrentUtil.result(
+            cs.handle((s, t) -> {
+                if (t != null) {
+                    LOGGER.error("Failed to create topic store.", t);
+                    start.fail(t);
+                    return null; // [1]
+                } else {
+                    service = s;
+                    return s.store;
+                }
+            }));
+    }
+
+    private void startK8sWatcher(Promise<Void> start) {
+        Promise<Void> initReconcilePromise = Promise.promise();
+
+        watcher = new K8sTopicWatcher(topicOperator, initReconcilePromise.future(), this::startWatcher);
+        LOGGER.debug("Starting watcher");
+        startWatcher().compose(
+            ignored -> {
+                LOGGER.debug("Starting health server");
+                Session.this.healthServer = startHealthServer();
+                return Future.<Void>succeededFuture();
+            }).onComplete(start);
+
+        final Long interval = config.get(Config.FULL_RECONCILIATION_INTERVAL_MS);
+        Handler<Long> periodic = new Handler<>() {
+            @Override
+            public void handle(Long oldTimerId) {
+                if (!stopped) {
+                    timerId = null;
+                    boolean isInitialReconcile = oldTimerId == null;
+                    topicOperator.getPeriodicReconciliationsCounter().increment();
+                    topicOperator.reconcileAllTopics(isInitialReconcile ? "initial " : "periodic ").onComplete(result -> {
+                        if (isInitialReconcile) {
+                            initReconcilePromise.complete();
+                        }
+                        if (!stopped) {
+                            timerId = vertx.setTimer(interval, this);
+                        }
+                    });
+                }
+            }
+        };
+        periodic.handle(null);
     }
 
     Future<Void> startWatcher() {

@@ -64,7 +64,7 @@ class DistributedStoreAndServiceFactory implements StoreAndServiceFactory {
         log.info("Application server gRPC: '{}'", appServer);
         HostInfo hostInfo = new HostInfo(hostPort[0], parseInt(hostPort[1]));
 
-        FilterPredicate<String, Topic> filter = (s, s1, s2, topic) -> true;
+        FilterPredicate<String, Topic> filter = (m, s, topic) -> true;
 
         DistributedReadOnlyKeyValueStore<String, Topic> distributedStore = new DistributedReadOnlyKeyValueStore<>(
                 streams,

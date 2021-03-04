@@ -31,6 +31,10 @@ public class LogContext {
         return new LogContext(znode + " " + childAction);
     }
 
+    static LogContext raftWatch(long offset, String childAction) {
+        return new LogContext(offset + "# " + childAction);
+    }
+
     static LogContext kubeWatch(Watcher.Action action, KafkaTopic kafkaTopic) {
         LogContext logContext = new LogContext("kube " + action(action) + kafkaTopic.getMetadata().getName());
         logContext.resourceVersion = kafkaTopic.getMetadata().getResourceVersion();

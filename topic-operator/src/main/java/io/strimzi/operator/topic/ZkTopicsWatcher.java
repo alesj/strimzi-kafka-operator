@@ -20,15 +20,16 @@ import java.util.Set;
  * calling {@link TopicOperator#onTopicCreated(LogContext, TopicName)} for new children and
  * {@link TopicOperator#onTopicDeleted(LogContext, TopicName)} for deleted children.
  */
-class ZkTopicsWatcher {
+class ZkTopicsWatcher extends TopicOperatorWatcher {
 
     private final static Logger LOGGER = LogManager.getLogger(ZkTopicsWatcher.class);
 
     private static final String TOPICS_ZNODE = "/brokers/topics";
 
-    private final TopicOperator topicOperator;
-    private final TopicConfigsWatcher tcw;
-    private final ZkTopicWatcher tw;
+    private final Zk zk;
+
+    /*test*/ protected final TopicConfigsWatcher tcw;
+    /*test*/ protected final ZkTopicWatcher tw;
 
     private List<String> children;
 
@@ -38,31 +39,32 @@ class ZkTopicsWatcher {
      * Constructor
      *
      * @param topicOperator    Operator instance
-     * @param tcw   watcher for the topics config changes
-     * @param tw    watcher for the topics partitions changes
      */
-    ZkTopicsWatcher(TopicOperator topicOperator, TopicConfigsWatcher tcw, ZkTopicWatcher tw) {
-        this.topicOperator = topicOperator;
-        this.tcw = tcw;
-        this.tw = tw;
+    ZkTopicsWatcher(TopicOperator topicOperator, Zk zk) {
+        super(topicOperator);
+        this.zk = zk;
+        this.tcw = new TopicConfigsWatcher(topicOperator, zk);
+        LOGGER.debug("Using TopicConfigsWatcher {}", tcw);
+        this.tw = new ZkTopicWatcher(topicOperator, zk);
+        LOGGER.debug("Using TopicWatcher {}", tw);
     }
 
-    void stop() {
+    public void stop() {
         this.tcw.stop();
         this.tw.stop();
         this.state = 2;
     }
 
-    boolean started() {
-        return this.state == 1;
+    public boolean started() {
+        return tcw.started() && tcw.started() && this.state == 1;
     }
 
-    void start(Zk zk) {
+    public void start() {
         synchronized (this) {
             children = null;
         }
-        tcw.start(zk);
-        tw.start(zk);
+        tcw.start();
+        tw.start();
         zk.watchChildren(TOPICS_ZNODE, new ChildrenWatchHandler(zk)).<Void>compose(zk2 -> {
             zk.children(TOPICS_ZNODE, childResult -> {
                 if (childResult.failed()) {

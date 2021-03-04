@@ -5,7 +5,6 @@
 package io.strimzi.operator.topic;
 
 import io.debezium.kafka.KafkaCluster;
-import io.debezium.kafka.ZookeeperServer;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
 import io.strimzi.api.kafka.Crds;
@@ -35,7 +34,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
@@ -63,10 +61,8 @@ public class TopicOperatorMockTest {
     private static Vertx vertx;
     private String deploymentId;
     private AdminClient adminClient;
-    private TopicConfigsWatcher topicsConfigWatcher;
-    private ZkTopicWatcher topicWatcher;
     private PrometheusMeterRegistry metrics;
-    private ZkTopicsWatcher topicsWatcher;
+    private TopicOperatorWatcher topicsWatcher;
 
     // TODO this is all in common with TOIT, so factor out a common base class
 
@@ -119,9 +115,7 @@ public class TopicOperatorMockTest {
         vertx.deployVerticle(session, ar -> {
             if (ar.succeeded()) {
                 deploymentId = ar.result();
-                topicsConfigWatcher = session.topicConfigsWatcher;
-                topicWatcher = session.topicWatcher;
-                topicsWatcher = session.topicsWatcher;
+                topicsWatcher = session.topicOperatorWatcher;
                 metrics = session.metricsRegistry;
                 metrics.forEachMeter(meter -> {
                     metrics.remove(meter);
@@ -138,10 +132,6 @@ public class TopicOperatorMockTest {
 
         int timeout = 30_000;
 
-        waitFor("Topic watcher not started",  1_000, timeout,
-            () -> this.topicWatcher.started());
-        waitFor("Topic configs watcher not started", 1_000, timeout,
-            () -> this.topicsConfigWatcher.started());
         waitFor("Topic watcher not started", 1_000, timeout,
             () -> this.topicsWatcher.started());
         //waitFor(context, () -> this.topicsConfigWatcher.started(), timeout, "Topic configs watcher not started");
@@ -153,14 +143,8 @@ public class TopicOperatorMockTest {
         CountDownLatch latch = new CountDownLatch(1);
         if (vertx != null && deploymentId != null) {
             vertx.undeploy(deploymentId, undeployResult -> {
-                topicWatcher.stop();
                 topicsWatcher.stop();
-                topicsConfigWatcher.stop();
                 metrics.close();
-                waitFor("Topic watcher stopped",  1_000, 30_000,
-                    () -> !this.topicWatcher.started());
-                waitFor("Topic configs watcher stopped", 1_000, 30_000,
-                    () -> !this.topicsConfigWatcher.started());
                 waitFor("Topic watcher stopped", 1_000, 30_000,
                     () -> !this.topicsWatcher.started());
                 waitFor("Metrics watcher stopped", 1_000, 30_000,
@@ -180,15 +164,7 @@ public class TopicOperatorMockTest {
     }
 
     private static int zkPort(KafkaCluster cluster) {
-        // TODO Method was added in DBZ-540, so no need for reflection once
-        // dependency gets upgraded
-        try {
-            Field zkServerField = KafkaCluster.class.getDeclaredField("zkServer");
-            zkServerField.setAccessible(true);
-            return ((ZookeeperServer) zkServerField.get(cluster)).getPort();
-        } catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e);
-        }
+        return cluster.zkPort();
     }
 
     private void createInKube(KafkaTopic topic) {

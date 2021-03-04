@@ -322,7 +322,7 @@ public class TopicOperatorIT extends TopicOperatorBaseIT {
         WatcherException e = new WatcherException(status.toString());
         LOGGER.info("stopping TW");
         session.topicWatch.close();
-        session.topicsWatcher.stop();
+        session.topicOperatorWatcher.stop();
         session.watcher.onClose(e);
 
         // trigger an immediate reconcile, while topic operator is dealing with resource modification

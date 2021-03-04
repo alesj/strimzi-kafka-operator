@@ -127,6 +127,12 @@ public class Config {
 
     public static final String TC_USE_ZOOKEEPER_TOPIC_STORE = "STRIMZI_USE_ZOOKEEPER_TOPIC_STORE";
 
+    public static final String TC_USE_RAFT_KAFKA = "STRIMZI_USE_RAFT_KAFKA";
+    public static final String TC_RAFT_WATCHER_CONSUMER_THREADS = "STRIMZI_RAFT_WATCHER_CONSUMER_THREADS";
+    public static final String TC_RAFT_WATCHER_POOL_THREADS = "STRIMZI_RAFT_WATCHER_POOL_THREADS";
+    public static final String TC_RAFT_WATCHER_POOL_TIMEOUT_SECONDS = "STRIMZI_RAFT_WATCHER_POOL_TIMEOUT_SECONDS";
+    public static final String TC_KAFKA_CONTROLLER_SERVERS = "STRIMZI_KAFKA_CONTROLLER_SERVERS";
+
     private static final Map<String, Value<?>> CONFIG_VALUES = new HashMap<>();
 
     /** A comma-separated list of key=value pairs for selecting Resources that describe topics. */
@@ -142,7 +148,7 @@ public class Config {
     public static final Value<String> CLIENT_ID = new Value<>(TC_CLIENT_ID, STRING, "strimzi-topic-operator-" + UUID.randomUUID());
 
     /** The zookeeper connection string. */
-    public static final Value<String> ZOOKEEPER_CONNECT = new Value<>(TC_ZK_CONNECT, STRING, true);
+    public static final Value<String> ZOOKEEPER_CONNECT = new Value<>(TC_ZK_CONNECT, STRING, false);
 
     /** The zookeeper session timeout. */
     public static final Value<Long> ZOOKEEPER_SESSION_TIMEOUT_MS = new Value<>(TC_ZK_SESSION_TIMEOUT_MS, DURATION, "20000");
@@ -199,13 +205,23 @@ public class Config {
     /** Do we use old ZooKeeper based TopicStore */
     public static final Value<Boolean> USE_ZOOKEEPER_TOPIC_STORE = new Value<>(TC_USE_ZOOKEEPER_TOPIC_STORE, BOOLEAN, "false");
 
+    /** Do we use new RAFT based Kafka */
+    public static final Value<Boolean> USE_RAFT_KAFKA = new Value<>(TC_USE_RAFT_KAFKA, BOOLEAN, "false");
+    /** The number of RAFT watcher consumer threads */
+    public static final Value<Integer> RAFT_WATCHER_CONSUMER_THREADS = new Value<>(TC_RAFT_WATCHER_CONSUMER_THREADS, POSITIVE_INTEGER, "1");
+    /** The number of RAFT watcher sync state threads */
+    public static final Value<Integer> RAFT_WATCHER_POOL_THREADS = new Value<>(TC_RAFT_WATCHER_POOL_THREADS, POSITIVE_INTEGER, "3");
+    /** The RAFT watcher timeout */
+    public static final Value<Long> RAFT_WATCHER_POOL_TIMEOUT_SECONDS = new Value<>(TC_RAFT_WATCHER_POOL_TIMEOUT_SECONDS, DURATION, "120");
+    /** A comma-separated list of Kafka controller servers. */
+    public static final Value<String> KAFKA_CONTROLLER_SERVERS = new Value<>(TC_KAFKA_CONTROLLER_SERVERS, STRING, false);
+
     static {
         Map<String, Value<?>> configValues = CONFIG_VALUES;
         addConfigValue(configValues, LABELS);
         addConfigValue(configValues, KAFKA_BOOTSTRAP_SERVERS);
         addConfigValue(configValues, NAMESPACE);
         addConfigValue(configValues, CLIENT_ID);
-        addConfigValue(configValues, ZOOKEEPER_CONNECT);
         addConfigValue(configValues, ZOOKEEPER_SESSION_TIMEOUT_MS);
         addConfigValue(configValues, ZOOKEEPER_CONNECTION_TIMEOUT_MS);
         addConfigValue(configValues, FULL_RECONCILIATION_INTERVAL_MS);
@@ -226,6 +242,11 @@ public class Config {
         addConfigValue(configValues, STALE_RESULT_TIMEOUT_MS);
         addConfigValue(configValues, DISTRIBUTED_STORE);
         addConfigValue(configValues, USE_ZOOKEEPER_TOPIC_STORE);
+        addConfigValue(configValues, USE_RAFT_KAFKA);
+        addConfigValue(configValues, RAFT_WATCHER_CONSUMER_THREADS);
+        addConfigValue(configValues, RAFT_WATCHER_POOL_THREADS);
+        addConfigValue(configValues, RAFT_WATCHER_POOL_TIMEOUT_SECONDS);
+        addConfigValue(configValues, KAFKA_CONTROLLER_SERVERS);
     }
 
     static void addConfigValue(Map<String, Value<?>> configValues, Value<?> cv) {

@@ -7,6 +7,8 @@ package io.strimzi.operator.topic;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 
 import io.vertx.core.CompositeFuture;
@@ -181,4 +183,15 @@ public class KafkaImpl implements Kafka {
         return handler.future();
     }
 
+    static <T> CompletionStage<T> toCompletionStage(KafkaFuture<T> kf) {
+        CompletableFuture<T> cf = new CompletableFuture<>();
+        kf.whenComplete((v, t) -> {
+            if (t != null) {
+                cf.completeExceptionally(t);
+            } else {
+                cf.complete(v);
+            }
+        });
+        return cf;
+    }
 }

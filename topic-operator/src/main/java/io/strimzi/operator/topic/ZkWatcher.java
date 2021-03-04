@@ -8,19 +8,14 @@ import io.strimzi.operator.topic.zk.Zk;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Base abstract class for a ZooKeeper watcher for child znodes
  */
-public abstract class ZkWatcher {
+public abstract class ZkWatcher extends TopicOperatorWatcher {
 
-    protected Logger log = LogManager.getLogger(getClass());
-
-    protected final TopicOperator topicOperator;
     private volatile ZkWatcherState state = ZkWatcherState.NOT_STARTED;
     private volatile Zk zk;
 
@@ -33,9 +28,10 @@ public abstract class ZkWatcher {
      * @param topicOperator    Operator instance to notify
      * @param rootZNode     root znode to watch children
      */
-    ZkWatcher(TopicOperator topicOperator, String rootZNode) {
-        this.topicOperator = topicOperator;
+    ZkWatcher(TopicOperator topicOperator, String rootZNode, Zk zk) {
+        super(topicOperator);
         this.rootZNode = rootZNode;
+        this.zk = zk;
     }
 
     /**
@@ -43,8 +39,7 @@ public abstract class ZkWatcher {
      *
      * @param zk    Zookeeper client instance
      */
-    protected void start(Zk zk) {
-        this.zk = zk;
+    protected void start() {
         this.state = ZkWatcherState.STARTED;
     }
 
